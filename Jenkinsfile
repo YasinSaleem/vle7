@@ -116,8 +116,11 @@ pipeline {
                             cd app/k8s
                             
                             # Update the deployment with new image and build number
-                            sed -i.bak 's|image: myapp:latest|image: ${IMAGE}|g' deployment-${COLOR}.yaml
-                            sed -i.bak 's|BUILD_NUMBER.*|BUILD_NUMBER\\n          value: "${BUILD_NUMBER}"|g' deployment-${COLOR}.yaml
+                            sed -i.bak 's|image: yasinsaleem/myapp:REPLACE_TAG|image: ${IMAGE}|g' deployment-${COLOR}.yaml
+                            sed -i.bak 's|value: "1"|value: "${BUILD_NUMBER}"|g' deployment-${COLOR}.yaml
+                            
+                            echo "Applying service (if not exists)..."
+                            kubectl apply -f service.yaml
                             
                             echo "Applying ${COLOR} deployment..."
                             kubectl apply -f deployment-${COLOR}.yaml --record
@@ -216,7 +219,7 @@ pipeline {
                         kubectl get deployments -l app=myapp -o wide
                         
                         echo "Current service selector:"
-                        kubectl get service myapp-service -o jsonpath='{.spec.selector}' | jq .
+                        kubectl get service myapp-service -o jsonpath='{.spec.selector}'
                         
                         echo "Pods ready for ${COLOR}:"
                         kubectl get pods -l app=myapp,color=${COLOR}
@@ -253,7 +256,7 @@ pipeline {
                             kubectl patch service myapp-service -p '{"spec":{"selector":{"color":"${COLOR}"}}}'
                             
                             echo "Verifying service update..."
-                            kubectl get service myapp-service -o jsonpath='{.spec.selector}' | jq .
+                            kubectl get service myapp-service -o jsonpath='{.spec.selector}'
                             
                             echo "Service endpoints:"
                             kubectl get endpoints myapp-service
@@ -265,8 +268,6 @@ pipeline {
                         throw e
                     }
                 }
-            }
-        }
             }
         }
         
@@ -326,7 +327,7 @@ pipeline {
             script {
                 sh """
                     echo "✅ SUCCESS: ${COLOR} deployment completed successfully"
-                    echo "🌐 Application URL: http://\$(kubectl get service myapp-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo 'pending')"
+                    echo "🌐 Application URL: \$(minikube service myapp-service --url 2>/dev/null || echo 'pending')"
                     echo "🎨 Active Color: ${COLOR}"
                     echo "📦 Image: ${IMAGE}"
                 """

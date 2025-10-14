@@ -76,17 +76,25 @@ git push -u origin main
    - **Script Path**: `Jenkinsfile`
 3. **Save**
 
-## Step 5: Setup GitHub Webhook (Optional - for Auto-trigger)
+## Step 5: Setup Automatic Builds (SCM Polling - Recommended)
 
-1. GitHub repo → **Settings** → **Webhooks** → **Add webhook**
-2. **Payload URL**: `http://YOUR_EC2_IP:8080/github-webhook/`
-   - Replace `YOUR_EC2_IP` with your actual EC2 public IP
-3. **Content type**: `application/json`
-4. **Which events**: `Just the push event`
-5. **Active**: ✅ Checked
-6. **Add webhook**
+Due to Jenkins authentication requirements for webhooks, **SCM Polling** is the most reliable method:
 
-> **Note**: If webhook doesn't work (common with public repos), you can manually trigger builds in Jenkins.
+### 5.1 Configure SCM Polling
+1. **Jenkins Job** → **Configure** → **Build Triggers**
+2. **Uncheck**: "GitHub hook trigger for GITScm polling" 
+3. **Check**: "Poll SCM"
+4. **Schedule**: `H/2 * * * *` (polls every 2 minutes)
+5. **Save**
+
+### 5.2 Alternative: GitHub Webhook (Advanced)
+If you prefer webhooks, you'll need to disable Jenkins authentication or use API tokens:
+
+**Webhook URL Options:**
+- `http://107.20.125.134:8080/git/notifyCommit?url=https://github.com/YasinSaleem/vle7.git`
+- Requires authentication token or disabled security
+
+**For most users, SCM polling is simpler and more reliable.**
 
 ## Step 6: Configure Automatic Pipeline Triggers
 

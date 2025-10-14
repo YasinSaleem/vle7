@@ -55,7 +55,6 @@ pipeline {
                 echo "🐳 Building Docker image: ${IMAGE}"
                 script {
                     try {
-                        // Build the Docker image
                         sh """
                             cd app
                             echo "Building Docker image with tag: ${IMAGE}"
@@ -115,7 +114,6 @@ pipeline {
                             echo "Updating deployment-${COLOR}.yaml with new image..."
                             cd app/k8s
                             
-                            # Update the deployment with new image and build number
                             sed -i.bak 's|image: yasinsaleem/myapp:REPLACE_TAG|image: ${IMAGE}|g' deployment-${COLOR}.yaml
                             sed -i.bak 's|value: "1"|value: "${BUILD_NUMBER}"|g' deployment-${COLOR}.yaml
                             
@@ -162,14 +160,11 @@ pipeline {
                     } catch (Exception e) {
                         echo "❌ Rollout failed or timed out: ${e.getMessage()}"
                         echo "🔄 Attempting automatic rollback..."
-                        
-                        // Automatic rollback on deployment failure
                         sh """
                             echo "Rolling back deployment..."
                             kubectl rollout undo deployment/myapp-${COLOR}
                             kubectl rollout status deployment/myapp-${COLOR} --timeout=180s
                         """
-                        
                         currentBuild.result = 'FAILURE'
                         throw e
                     }
@@ -212,20 +207,13 @@ pipeline {
                     echo "📊 Current service selector points to: ${previousColor}"
                     echo "🔄 After approval, traffic will switch to: ${COLOR}"
                     
-                    // Show current deployment status
                     sh """
                         echo "=== DEPLOYMENT SUMMARY ==="
-                        echo "Current deployments:"
                         kubectl get deployments -l app=myapp -o wide
-                        
-                        echo "Current service selector:"
                         kubectl get service myapp-service -o jsonpath='{.spec.selector}'
-                        
-                        echo "Pods ready for ${COLOR}:"
                         kubectl get pods -l app=myapp,color=${COLOR}
                     """
                     
-                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
                     timeout(time: 10, unit: 'MINUTES') {
                         input message: """
                         🚦 Ready to switch traffic to ${COLOR}?
@@ -249,16 +237,9 @@ pipeline {
                     echo "🔄 Switching traffic from ${previousColor} to ${COLOR}..."
                     try {
                         sh """
-                            echo "Current service selector:"
                             kubectl get service myapp-service -o jsonpath='{.spec.selector}'
-                            
-                            echo "Patching service to point to ${COLOR}..."
                             kubectl patch service myapp-service -p '{"spec":{"selector":{"color":"${COLOR}"}}}'
-                            
-                            echo "Verifying service update..."
                             kubectl get service myapp-service -o jsonpath='{.spec.selector}'
-                            
-                            echo "Service endpoints:"
                             kubectl get endpoints myapp-service
                         """
                         echo "✅ Traffic successfully switched to ${COLOR}!"
@@ -293,14 +274,10 @@ pipeline {
                             
                             echo "🧹 Cleaning up old ${previousColor} deployment..."
                             sh """
-                                echo "Scaling down ${previousColor} deployment..."
                                 kubectl scale deployment myapp-${previousColor} --replicas=0
-                                
-                                echo "Remaining deployments:"
                                 kubectl get deployments -l app=myapp
                             """
                             echo "✅ Old deployment cleaned up!"
-                            
                         } catch (Exception e) {
                             echo "⏭️ Cleanup skipped or timed out - keeping ${previousColor} deployment for manual cleanup"
                         }
@@ -308,7 +285,8 @@ pipeline {
                 }
             }
         }
-    
+    } // ✅ close stages
+
     post {
         always {
             echo "🏁 Pipeline completed!"
@@ -341,13 +319,8 @@ pipeline {
                     def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
                     echo "🔄 Attempting automatic rollback to ${previousColor}..."
                     sh """
-                        echo "Rolling back service to ${previousColor}..."
                         kubectl patch service myapp-service -p '{"spec":{"selector":{"color":"${previousColor}"}}}'
-                        
-                        echo "Checking ${previousColor} deployment status..."
                         kubectl get deployment myapp-${previousColor} || echo "${previousColor} deployment not found"
-                        
-                        echo "Service rolled back to ${previousColor}"
                         kubectl get service myapp-service -o jsonpath='{.spec.selector}'
                     """
                     echo "✅ Automatic rollback to ${previousColor} completed"
@@ -360,11 +333,10 @@ pipeline {
         
         cleanup {
             echo "🧹 Cleaning up workspace..."
-            // Clean up local Docker images to save space
             sh """
                 docker rmi ${IMAGE} || echo "Image cleanup skipped"
                 docker system prune -f || echo "Docker cleanup skipped"
             """
         }
-    }
-}
+    } // ✅ close post
+} // ✅ close pipeline

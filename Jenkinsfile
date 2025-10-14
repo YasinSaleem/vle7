@@ -12,6 +12,11 @@ pipeline {
             defaultValue: false,
             description: 'Skip test stages'
         )
+        booleanParam(
+            name: 'SKIP_KUBERNETES',
+            defaultValue: false,
+            description: 'Skip Kubernetes deployment (Docker build/push only)'
+        )
     }
     
     environment {

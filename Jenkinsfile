@@ -119,7 +119,8 @@ pipeline {
                             echo "Updating deployment-${COLOR}.yaml with new image..."
                             cd app/k8s
                             
-                            sed -i.bak 's|image: yasinsaleem/myapp:REPLACE_TAG|image: ${IMAGE}|g' deployment-${COLOR}.yaml
+                            # Update the deployment with new image and build number
+                            sed -i.bak 's|image: yasinsaleem/myapp:latest|image: ${IMAGE}|g' deployment-${COLOR}.yaml
                             sed -i.bak 's|value: "1"|value: "${BUILD_NUMBER}"|g' deployment-${COLOR}.yaml
                             
                             echo "Applying service (if not exists)..."
@@ -310,7 +311,7 @@ pipeline {
             script {
                 sh """
                     echo "✅ SUCCESS: ${COLOR} deployment completed successfully"
-                    echo "🌐 Application URL: \$(minikube service myapp-service --url 2>/dev/null || echo 'pending')"
+                    echo "🌐 Application URL: http://\$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[0].address}'):30080 (NodePort)"
                     echo "🎨 Active Color: ${COLOR}"
                     echo "📦 Image: ${IMAGE}"
                 """

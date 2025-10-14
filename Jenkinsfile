@@ -6,12 +6,7 @@ pipeline {
             name: 'COLOR',
             choices: ['green', 'blue'],
             description: 'Deployment color for blue-green deployment'
-                script {
-                script {
-                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
-                    echo "🎯 Ready to switch traffic to ${COLOR} deployment"
-                    echo "📊 Current service selector points to: ${previousColor}"
-                    echo "🔄 After approval, traffic will switch to: ${COLOR}"
+        )
         booleanParam(
             name: 'SKIP_TESTS',
             defaultValue: false,
@@ -209,8 +204,9 @@ pipeline {
         stage('Manual Approval') {
             steps {
                 script {
+                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
                     echo "🎯 Ready to switch traffic to ${COLOR} deployment"
-                    echo "📊 Current service selector points to: ${PREVIOUS_COLOR}"
+                    echo "📊 Current service selector points to: ${previousColor}"
                     echo "🔄 After approval, traffic will switch to: ${COLOR}"
                     
                     // Show current deployment status

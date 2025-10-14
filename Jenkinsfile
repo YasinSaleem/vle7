@@ -192,7 +192,13 @@ pipeline {
                             
                             for pod in \$PODS; do
                                 echo "Testing health check for pod: \$pod"
-                                kubectl exec \$pod -- curl -f http://localhost:8080/health || exit 1
+                                # Use port-forward instead of curl inside container (curl not available in Node.js image)
+                                timeout 10 kubectl port-forward \$pod 8090:8080 </dev/null &>/dev/null &
+                                PORT_FORWARD_PID=\$!
+                                sleep 3
+                                curl -f http://localhost:8090/health || (kill \$PORT_FORWARD_PID 2>/dev/null || true; exit 1)
+                                kill \$PORT_FORWARD_PID 2>/dev/null || true
+                                echo "✅ Health check passed for pod: \$pod"
                             done
                         """
                         echo "✅ Health check passed!"

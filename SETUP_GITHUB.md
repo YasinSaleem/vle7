@@ -77,7 +77,7 @@ git push -u origin main
 3. **Save**
 
 ## Step 5: Setup GitHub Webhook (Optional - for Auto-trigger)
-
+.
 1. GitHub repo → **Settings** → **Webhooks** → **Add webhook**
 2. **Payload URL**: `http://YOUR_EC2_IP:8080/github-webhook/`
    - Replace `YOUR_EC2_IP` with your actual EC2 public IP

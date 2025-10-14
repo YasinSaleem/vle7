@@ -231,11 +231,107 @@
       ignore_errors: yes
 
     - name: Display Jenkins initial admin password
-      debug:
-        msg: "Jenkins initial admin password: {{ jenkins_password.content | b64decode | trim }}"
-      when: jenkins_password is succeeded
+      shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_password
+      become: yes
 
-  handlers:
+    - name: Show Jenkins admin password
+      debug:
+        msg: "Jenkins initial admin password: {{ jenkins_password.stdout }}"
+
+    # Kubernetes Configuration for Jenkins
+    - name: Create .kube directory for jenkins user
+      file:
+        path: /var/lib/jenkins/.kube
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+      become: yes
+
+    - name: Copy kubeconfig to jenkins user
+      copy:
+        src: ~/.kube/config
+        dest: /var/lib/jenkins/.kube/config
+        owner: jenkins
+        group: jenkins
+        mode: '0600'
+        backup: yes
+      become: yes
+      ignore_errors: yes
+      tags: kubeconfig
+
+    - name: Alternative - Create basic kubeconfig template for minikube
+      shell: |
+        if [ ! -f /var/lib/jenkins/.kube/config ]; then
+          echo "Creating basic kubeconfig for minikube access"
+          # Copy from default location if minikube is set up
+          if [ -f /home/ec2-user/.kube/config ]; then
+            cp /home/ec2-user/.kube/config /var/lib/jenkins/.kube/config
+            chown jenkins:jenkins /var/lib/jenkins/.kube/config
+            chmod 600 /var/lib/jenkins/.kube/config
+          fi
+        fi
+      become: yes
+      tags: kubeconfig
+
+    # Docker Configuration for Jenkins
+    - name: Create .docker directory for jenkins user
+      file:
+        path: /var/lib/jenkins/.docker
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+      become: yes
+
+    - name: Create Docker config template for jenkins user
+      copy:
+        content: |
+          {
+            "auths": {},
+            "credsStore": "secretservice"
+          }
+        dest: /var/lib/jenkins/.docker/config.json
+        owner: jenkins
+        group: jenkins
+        mode: '0600'
+      become: yes
+
+    # Jenkins Environment Setup
+    - name: Add jenkins user to docker group (if not already)
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+      become: yes
+
+    - name: Set KUBECONFIG environment variable for jenkins
+      lineinfile:
+        path: /etc/environment
+        line: 'KUBECONFIG=/var/lib/jenkins/.kube/config'
+        create: yes
+      become: yes
+
+    - name: Create Jenkins environment file
+      copy:
+        content: |
+          # Jenkins Environment Variables
+          KUBECONFIG=/var/lib/jenkins/.kube/config
+          DOCKER_CONFIG=/var/lib/jenkins/.docker
+          PATH=$PATH:/usr/local/bin
+        dest: /var/lib/jenkins/.env
+        owner: jenkins
+        group: jenkins
+        mode: '0644'
+      become: yes
+
+    - name: Restart Jenkins to apply configuration changes
+      systemd:
+        name: jenkins
+        state: restarted
+        enabled: yes
+      become: yes  handlers:
     - name: restart jenkins
       systemd:
         name: jenkins

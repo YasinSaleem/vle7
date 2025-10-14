@@ -73,6 +73,16 @@ Check these AWS services for any remaining resources:
 
 ## 🚀 QUICK RESTART (When Needed Again)
 
+### Option 1: Start Existing Instance (Recommended)
+```bash
+# Start the stopped instance (keeps all data, changes IP)
+aws ec2 start-instances --instance-ids i-0141f4c498770a53c
+
+# Get new IP address
+aws ec2 describe-instances --instance-ids i-0141f4c498770a53c --query 'Reservations[0].Instances[0].PublicIpAddress'
+```
+
+### Option 2: Recreate Everything (if needed)
 ```bash
 cd /Users/yasinsaleem/CourseWork/DevOps/vle7/infra/terraform
 terraform plan
@@ -89,9 +99,9 @@ terraform apply
 
 ### Current Instance Details:
 - **Instance ID**: i-0141f4c498770a53c
-- **IP Address**: 54.221.124.93  
+- **Status**: STOPPED (October 14, 2025 - saving costs!)
+- **Last IP**: 54.221.124.93 (will change when restarted)
 - **Type**: t3.small (2 vCPU, 2GB RAM)
-- **Started**: October 14, 2025
 
 ## 🎯 POST-PROJECT CLEANUP
 

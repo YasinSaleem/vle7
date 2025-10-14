@@ -1,0 +1,76 @@
+---
+# Global variables for all hosts
+# Override these variables as needed for your environment
+
+# AWS Configuration
+aws_region: "us-east-1"  # Match your Terraform region
+
+# Jenkins Configuration
+jenkins_version: "latest"
+jenkins_admin_user: "admin"
+jenkins_home: "/var/lib/jenkins"
+
+# SSH Configuration (optional)
+# Uncomment and set your SSH public key for additional access
+# jenkins_ssh_pubkey: "ssh-rsa AAAAB3NzaC... your-public-key"
+
+# EKS Configuration (optional)
+# Uncomment if you have an EKS cluster to connect to
+# eks_cluster_name: "your-eks-cluster-name"
+
+# Docker Configuration
+docker_compose_version: "2.21.0"
+docker_users:
+  - ec2-user
+  - jenkins
+
+# Tool Versions
+kubectl_version: "v1.28.0"
+java_package: "java-11-openjdk"
+maven_package: "maven"
+
+# System Configuration
+system_packages:
+  - git
+  - wget
+  - curl
+  - unzip
+  - vim
+
+# Jenkins Plugins (for future automation)
+# jenkins_plugins:
+#   - git
+#   - workflow-aggregator
+#   - docker-plugin
+#   - kubernetes
+#   - aws-credentials
+#   - pipeline-aws
+#   - blueocean
+
+# Credentials Configuration
+# NOTE: Set these securely using ansible-vault or environment variables
+# 
+# For DockerHub access (if needed):
+# dockerhub_username: "your-dockerhub-username"
+# dockerhub_password: "your-dockerhub-password"
+# dockerhub_email: "your-dockerhub-email"
+#
+# For AWS credentials (if not using IAM roles):
+# aws_access_key_id: "your-aws-access-key"
+# aws_secret_access_key: "your-aws-secret-key"
+#
+# For Jenkins admin user:
+# jenkins_admin_password: "your-secure-password"
+
+# Security Settings
+jenkins_security_realm: "hudson.security.HudsonPrivateSecurityRealm"
+jenkins_authorization_strategy: "hudson.security.FullControlOnceLoggedInAuthorizationStrategy"
+
+# Network Configuration
+jenkins_port: 8080
+jenkins_context_path: ""
+
+# Backup Configuration (optional)
+# jenkins_backup_enabled: false
+# jenkins_backup_schedule: "0 2 * * *"  # Daily at 2 AM
+# jenkins_backup_retention_days: 30

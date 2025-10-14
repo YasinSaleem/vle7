@@ -1,0 +1,285 @@
+---
+# Jenkins Setup Playbook for Amazon Linux 2
+# This playbook installs and configures Jenkins with Docker, kubectl, and other DevOps tools
+
+- name: Setup Jenkins Server
+  hosts: jenkins
+  become: yes
+  vars:
+    jenkins_user: "jenkins"
+    system_user: "ec2-user"
+    
+  tasks:
+    # Update system packages
+    - name: Update package cache
+      command: yum makecache
+      changed_when: false
+
+    # Install Java 11
+    - name: Install Amazon Corretto 11 (Amazon Linux 2023)
+      ansible.builtin.dnf:
+        name: java-11-amazon-corretto
+        state: present
+        use_backend: dnf5
+      when:
+        - ansible_distribution == "Amazon"
+        - ansible_distribution_major_version | int >= 2023
+
+    - name: Install Amazon Corretto 11 (Amazon Linux 2 and other older distros)
+      raw: sudo yum install -y java-11-amazon-corretto-headless
+      when:
+        - ansible_distribution == "Amazon"
+        - ansible_distribution_major_version | int < 2023
+
+    - name: Install OpenJDK 11 (fallback for non-Amazon distros)
+      ansible.builtin.apt:
+        name: openjdk-11-jdk
+        state: present
+      when: ansible_os_family == "Debian"
+
+    # Install Git and Maven (Amazon Linux 2023)
+    - name: Install Git and Maven (AL2023)
+      ansible.builtin.dnf:
+        name: 
+          - git
+          - maven
+        state: present
+        use_backend: dnf5
+      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int >= 2023
+
+    # Install Git and Maven (Amazon Linux 2)
+    - name: Install Git and Maven (AL2)
+      raw: sudo yum install -y git maven
+      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int < 2023
+
+    # Install Docker (Amazon Linux 2023)
+    - name: Install Docker (AL2023)
+      ansible.builtin.dnf:
+        name: docker
+        state: present
+        use_backend: dnf5
+      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int >= 2023
+
+    # Install Docker (Amazon Linux 2)
+    - name: Install Docker (AL2)
+      raw: sudo yum install -y docker
+      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int < 2023
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # Install Docker Compose
+    - name: Install Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Create docker-compose symlink
+      file:
+        src: /usr/local/bin/docker-compose
+        dest: /usr/bin/docker-compose
+        state: link
+
+    # Add Jenkins repository and install
+    - name: Add Jenkins repository
+      get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+
+    - name: Import Jenkins GPG key
+      rpm_key:
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+        state: present
+
+    # Install Jenkins (Amazon Linux 2023)
+    - name: Install Jenkins (AL2023)
+      ansible.builtin.dnf:
+        name: jenkins
+        state: present
+        use_backend: dnf5
+      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int >= 2023
+
+    # Install Jenkins (Amazon Linux 2)
+    - name: Install Jenkins (AL2)
+      raw: sudo yum install -y jenkins
+      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int < 2023
+
+    # Configure Jenkins service
+    - name: Start and enable Jenkins service
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    # Add users to docker group
+    - name: Add ec2-user to docker group
+      user:
+        name: "{{ system_user }}"
+        groups: docker
+        append: yes
+
+    - name: Add jenkins user to docker group
+      user:
+        name: "{{ jenkins_user }}"
+        groups: docker
+        append: yes
+
+    # Install kubectl
+    - name: Download kubectl
+      get_url:
+        url: "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+
+    # Install AWS CLI v2
+    - name: Download AWS CLI v2
+      get_url:
+        url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+        dest: /tmp/awscliv2.zip
+
+    - name: Install unzip for AWS CLI
+      raw: sudo yum install -y unzip
+
+    - name: Extract AWS CLI
+      unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp
+        remote_src: yes
+
+    - name: Install AWS CLI
+      command: /tmp/aws/install --update
+      args:
+        creates: /usr/local/bin/aws
+
+    # Create directories
+    - name: Create .kube directory for ec2-user
+      file:
+        path: "/home/{{ system_user }}/.kube"
+        state: directory
+        owner: "{{ system_user }}"
+        group: "{{ system_user }}"
+        mode: '0755'
+
+    - name: Create jenkins-seed directory
+      file:
+        path: "/home/{{ system_user }}/jenkins-seed"
+        state: directory
+        owner: "{{ system_user }}"
+        group: "{{ system_user }}"
+        mode: '0755'
+
+    # Create Jenkins seed job template
+    - name: Create Jenkins seed job template
+      copy:
+        content: |
+          # Jenkins Seed Job Template
+          # This directory contains templates for Jenkins pipeline jobs
+          
+          # Example pipeline job configuration
+          # Place your Jenkinsfile templates here
+          
+          # To use:
+          # 1. Create Jenkins jobs using Job DSL or manually
+          # 2. Configure pipelines to use these templates
+          # 3. Update with your specific pipeline configurations
+          
+          # Placeholder files:
+          # - Jenkinsfile.example
+          # - job-dsl-seed.groovy
+          # - pipeline-templates/
+        dest: "/home/{{ system_user }}/jenkins-seed/README.md"
+        owner: "{{ system_user }}"
+        group: "{{ system_user }}"
+        mode: '0644'
+
+    # Configure SSH authorized keys if public key is provided
+    - name: Add SSH public key to authorized_keys
+      authorized_key:
+        user: "{{ system_user }}"
+        key: "{{ jenkins_ssh_pubkey }}"
+        state: present
+      when: jenkins_ssh_pubkey is defined and jenkins_ssh_pubkey != ""
+
+    # Configure kubeconfig for EKS if cluster name is provided
+    - name: Configure EKS kubeconfig
+      shell: |
+        aws eks update-kubeconfig --region {{ aws_region }} --name {{ eks_cluster_name }} --kubeconfig /home/{{ system_user }}/.kube/config
+        chown {{ system_user }}:{{ system_user }} /home/{{ system_user }}/.kube/config
+      when: eks_cluster_name is defined and eks_cluster_name != ""
+      become: yes
+
+    # Wait for Jenkins to start
+    - name: Wait for Jenkins to start
+      uri:
+        url: "http://localhost:8080"
+        method: GET
+        status_code: [200, 403]
+      register: jenkins_status
+      until: jenkins_status.status in [200, 403]
+      retries: 30
+      delay: 10
+
+    # Get Jenkins initial admin password
+    - name: Get Jenkins initial admin password
+      slurp:
+        src: /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_password
+      ignore_errors: yes
+
+    - name: Display Jenkins initial admin password
+      debug:
+        msg: "Jenkins initial admin password: {{ jenkins_password.content | b64decode | trim }}"
+      when: jenkins_password is succeeded
+
+  handlers:
+    - name: restart jenkins
+      systemd:
+        name: jenkins
+        state: restarted
+
+# Post-installation information
+- name: Display setup information
+  hosts: jenkins
+  become: no
+  tasks:
+    - name: Display Jenkins access information
+      debug:
+        msg: |
+          ==========================================
+          Jenkins Setup Complete!
+          ==========================================
+          
+          Jenkins URL: http://{{ ansible_host }}:8080
+          
+          Initial Setup Steps:
+          1. SSH to server: ssh -i {{ ansible_private_key_file }} {{ ansible_user }}@{{ ansible_host }}
+          2. Get initial admin password: sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+          3. Access Jenkins web interface and complete setup wizard
+          4. Install suggested plugins or customize plugin selection
+          
+          Installed Tools:
+          - Java 11 OpenJDK
+          - Docker & Docker Compose
+          - Git & Maven
+          - kubectl
+          - AWS CLI v2
+          - Jenkins (latest stable)
+          
+          Docker Access:
+          - ec2-user and jenkins users added to docker group
+          - Restart required for group changes to take effect
+          
+          Notes:
+          - Jenkins seed templates available in /home/ec2-user/jenkins-seed/
+          - EKS kubeconfig will be configured if eks_cluster_name variable is set
+          - SSH public key will be added if jenkins_ssh_pubkey variable is set
+          
+          Security Reminders:
+          - Change default Jenkins admin password after setup
+          - Configure Jenkins security settings
+          - Set up proper authentication and authorization
+          ==========================================

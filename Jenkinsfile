@@ -6,7 +6,12 @@ pipeline {
             name: 'COLOR',
             choices: ['green', 'blue'],
             description: 'Deployment color for blue-green deployment'
-        )
+                script {
+                script {
+                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
+                    echo "🎯 Ready to switch traffic to ${COLOR} deployment"
+                    echo "📊 Current service selector points to: ${previousColor}"
+                    echo "🔄 After approval, traffic will switch to: ${COLOR}"
         booleanParam(
             name: 'SKIP_TESTS',
             defaultValue: false,
@@ -18,8 +23,7 @@ pipeline {
         IMAGE = "yasinsaleem/myapp:${BUILD_NUMBER}"
         REGISTRY = "docker.io"
         COLOR = "${params.COLOR}"
-        PREVIOUS_COLOR = ""
-        KUBECONFIG_FILE = "/home/jenkins/.kube/config"
+        KUBECONFIG_FILE = "/var/lib/jenkins/.kube/config"
     }
     
     stages {
@@ -32,8 +36,8 @@ pipeline {
                     echo "🐳 Docker Image: ${IMAGE}"
                     
                     // Determine previous color for rollback
-                    env.PREVIOUS_COLOR = (COLOR == 'blue') ? 'green' : 'blue'
-                    echo "🔄 Previous Color (for rollback): ${PREVIOUS_COLOR}"
+                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
+                    echo "🔄 Previous Color (for rollback): ${previousColor}"
                 }
             }
         }
@@ -222,13 +226,14 @@ pipeline {
                         kubectl get pods -l app=myapp,color=${COLOR}
                     """
                     
+                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
                     timeout(time: 10, unit: 'MINUTES') {
                         input message: """
                         🚦 Ready to switch traffic to ${COLOR}?
                         
                         Current Status:
                         • ${COLOR} deployment is ready and healthy
-                        • Service currently points to: ${PREVIOUS_COLOR}
+                        • Service currently points to: ${previousColor}
                         
                         Click 'Proceed' to switch traffic to ${COLOR}
                         """, 
@@ -240,8 +245,9 @@ pipeline {
         
         stage('Switch Traffic') {
             steps {
-                echo "🔄 Switching traffic from ${PREVIOUS_COLOR} to ${COLOR}..."
                 script {
+                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
+                    echo "🔄 Switching traffic from ${previousColor} to ${COLOR}..."
                     try {
                         sh """
                             echo "Current service selector:"
@@ -265,6 +271,8 @@ pipeline {
                 }
             }
         }
+            }
+        }
         
         stage('Cleanup Old Deployment') {
             when {
@@ -272,23 +280,24 @@ pipeline {
             }
             steps {
                 script {
+                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
                     timeout(time: 2, unit: 'MINUTES') {
                         try {
                             input message: """
-                            🧹 Cleanup old ${PREVIOUS_COLOR} deployment?
+                            🧹 Cleanup old ${previousColor} deployment?
                             
                             Current Status:
                             • Traffic is now on ${COLOR}
-                            • ${PREVIOUS_COLOR} deployment is still running
+                            • ${previousColor} deployment is still running
                             
-                            Click 'Proceed' to remove ${PREVIOUS_COLOR} deployment
+                            Click 'Proceed' to remove ${previousColor} deployment
                             """, 
                             ok: 'Cleanup Old Deployment'
                             
-                            echo "🧹 Cleaning up old ${PREVIOUS_COLOR} deployment..."
+                            echo "🧹 Cleaning up old ${previousColor} deployment..."
                             sh """
-                                echo "Scaling down ${PREVIOUS_COLOR} deployment..."
-                                kubectl scale deployment myapp-${PREVIOUS_COLOR} --replicas=0
+                                echo "Scaling down ${previousColor} deployment..."
+                                kubectl scale deployment myapp-${previousColor} --replicas=0
                                 
                                 echo "Remaining deployments:"
                                 kubectl get deployments -l app=myapp
@@ -296,7 +305,7 @@ pipeline {
                             echo "✅ Old deployment cleaned up!"
                             
                         } catch (Exception e) {
-                            echo "⏭️ Cleanup skipped or timed out - keeping ${PREVIOUS_COLOR} deployment for manual cleanup"
+                            echo "⏭️ Cleanup skipped or timed out - keeping ${previousColor} deployment for manual cleanup"
                         }
                     }
                 }
@@ -333,18 +342,19 @@ pipeline {
             echo "❌ Deployment failed!"
             script {
                 try {
-                    echo "🔄 Attempting automatic rollback to ${PREVIOUS_COLOR}..."
+                    def previousColor = (COLOR == 'blue') ? 'green' : 'blue'
+                    echo "🔄 Attempting automatic rollback to ${previousColor}..."
                     sh """
-                        echo "Rolling back service to ${PREVIOUS_COLOR}..."
-                        kubectl patch service myapp-service -p '{"spec":{"selector":{"color":"${PREVIOUS_COLOR}"}}}'
+                        echo "Rolling back service to ${previousColor}..."
+                        kubectl patch service myapp-service -p '{"spec":{"selector":{"color":"${previousColor}"}}}'
                         
-                        echo "Checking ${PREVIOUS_COLOR} deployment status..."
-                        kubectl get deployment myapp-${PREVIOUS_COLOR} || echo "${PREVIOUS_COLOR} deployment not found"
+                        echo "Checking ${previousColor} deployment status..."
+                        kubectl get deployment myapp-${previousColor} || echo "${previousColor} deployment not found"
                         
-                        echo "Service rolled back to ${PREVIOUS_COLOR}"
+                        echo "Service rolled back to ${previousColor}"
                         kubectl get service myapp-service -o jsonpath='{.spec.selector}'
                     """
-                    echo "✅ Automatic rollback to ${PREVIOUS_COLOR} completed"
+                    echo "✅ Automatic rollback to ${previousColor} completed"
                 } catch (Exception rollbackError) {
                     echo "❌ Automatic rollback failed: ${rollbackError.getMessage()}"
                     echo "🚨 Manual intervention required!"

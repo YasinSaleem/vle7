@@ -15,7 +15,7 @@ pipeline {
     }
     
     environment {
-        IMAGE = "mydockerhubuser/myapp:${BUILD_NUMBER}"
+        IMAGE = "yasinsaleem/myapp:${BUILD_NUMBER}"
         REGISTRY = "docker.io"
         COLOR = "${params.COLOR}"
         PREVIOUS_COLOR = ""

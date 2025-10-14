@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: myapp
-        image: mydockerhubuser/myapp:REPLACE_TAG
+        image: yasinsaleem/myapp:REPLACE_TAG
         ports:
         - containerPort: 8080
         env:

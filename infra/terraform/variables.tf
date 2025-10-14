@@ -10,26 +10,26 @@ variable "aws_region" {
 variable "key_name" {
   description = "AWS EC2 Key Pair name for SSH access (create one in AWS console first)"
   type        = string
-  default     = ""  # Can be empty - instance will work without SSH key
+  default     = "yasinkey"  # Set to our key name
 }
 
 variable "instance_type" {
-  description = "EC2 instance type - Free tier options: t2.micro, t3.micro"
+  description = "EC2 instance type - t3.small for minikube support (NOT FREE TIER)"
   type        = string
-  default     = "t3.micro"  # AWS Free Tier: 750 hours/month for 12 months
+  default     = "t3.small"  # t3.small: 2 vCPU, 2GB RAM - Required for minikube
   
   validation {
-    condition = contains(["t2.micro", "t3.micro"], var.instance_type)
-    error_message = "For free tier compatibility, use t2.micro or t3.micro."
+    condition = contains(["t2.micro", "t3.micro", "t3.small"], var.instance_type)
+    error_message = "Supported instance types: t2.micro, t3.micro (free tier) or t3.small (paid)."
   }
 }
 
 # Example terraform.tfvars file (optional):
 # aws_region    = "us-west-2"
 # key_name      = "my-key-pair"  
-# instance_type = "t3.micro"    # Default - or "t2.micro" also free tier eligible
+# instance_type = "t3.small"    # PAID INSTANCE: ~$0.0208/hour (~$15/month)
 
-# AWS Free Tier includes:
-# - 750 hours/month of t2.micro or t3.micro instances (12 months)
-# - 30 GB of EBS storage
-# - 15 GB of bandwidth
+# COST WARNING:
+# - t3.small is NOT FREE TIER (~$15/month)
+# - Use t2.micro or t3.micro for free tier (but insufficient for minikube)
+# - Remember to destroy infrastructure when done: terraform destroy

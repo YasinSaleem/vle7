@@ -94,6 +94,18 @@
         - reload systemd
         - restart jenkins
 
+    - name: Configure Jenkins PATH for kubectl access
+      become: yes
+      copy:
+        content: |
+          [Service]
+          Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+          Environment="KUBECONFIG=/var/lib/jenkins/.kube/config"
+        dest: /etc/systemd/system/jenkins.service.d/kubectl.conf
+      notify:
+        - reload systemd
+        - restart jenkins
+
     # Configure Jenkins service
     - name: Start and enable Jenkins service
       systemd:
@@ -114,6 +126,41 @@
         url: "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
         dest: /usr/local/bin/kubectl
         mode: '0755'
+
+    # Create kubectl configuration for Jenkins
+    - name: Create Jenkins .kube directory
+      become: yes
+      file:
+        path: /var/lib/jenkins/.kube
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    - name: Create basic kubeconfig for Jenkins
+      become: yes
+      copy:
+        content: |
+          apiVersion: v1
+          kind: Config
+          clusters:
+          - cluster:
+              server: https://127.0.0.1:6443
+              insecure-skip-tls-verify: true
+            name: default-cluster
+          contexts:
+          - context:
+              cluster: default-cluster
+              user: default-user
+            name: default-context
+          current-context: default-context
+          users:
+          - name: default-user
+            user: {}
+        dest: /var/lib/jenkins/.kube/config
+        owner: jenkins
+        group: jenkins
+        mode: '0600'
 
     # Note: Minikube removed to save memory - using remote K8s cluster instead
     # For local testing, you can install kind (Kubernetes in Docker) as a lighter alternative

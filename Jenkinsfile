@@ -59,7 +59,9 @@ pipeline {
         
         stage('Prepare Application') {
             when {
-                not { params.SKIP_DOCKER_BUILD }
+                not {
+                    expression { params.SKIP_DOCKER_BUILD }
+                }
             }
             steps {
                 echo "� Preparing application deployment..."

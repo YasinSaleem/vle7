@@ -146,6 +146,16 @@ pipeline {
                 }
             }
         }
+
+        stage('Debug Kubernetes') {
+            steps {
+                sh '''
+                echo "KUBECONFIG: $KUBECONFIG"
+                kubectl cluster-info
+                kubectl get nodes
+                '''
+            }
+        }
     }
 
     post {

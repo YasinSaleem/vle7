@@ -106,7 +106,9 @@ pipeline {
                                 kubectl cluster-info || echo "⚠️ Warning: No Kubernetes cluster configured"
                                 
                 echo "Applying ${COLOR} deployment..."
-                if kubectl cluster-info &>/dev/null; then
+                CLUSTER_STATUS=\$(kubectl cluster-info &>/dev/null && echo "connected" || echo "disconnected")
+                
+                if [ "\$CLUSTER_STATUS" = "connected" ]; then
                     kubectl apply -f deployment-${COLOR}.yaml
                     echo "✅ Deployment applied to cluster"
                 else
@@ -118,7 +120,7 @@ pipeline {
                 fi
                 
                 echo "Ensuring service exists..."
-                if kubectl cluster-info &>/dev/null; then
+                if [ "\$CLUSTER_STATUS" = "connected" ]; then
                     kubectl apply -f service.yaml
                     echo "✅ Service applied to cluster"
                 else
@@ -130,7 +132,7 @@ pipeline {
                 fi
                 
                 echo "Current deployments:"
-                if kubectl cluster-info &>/dev/null; then
+                if [ "\$CLUSTER_STATUS" = "connected" ]; then
                     kubectl get deployments -l app=${APP_NAME} -o wide
                 else
                     echo "🔧 DEMO MODE: Would show deployments for app=${APP_NAME}"
@@ -138,7 +140,7 @@ pipeline {
                 fi
                 
                 echo "Current services:"
-                if kubectl cluster-info &>/dev/null; then
+                if [ "\$CLUSTER_STATUS" = "connected" ]; then
                     kubectl get services -l app=${APP_NAME} -o wide
                 else
                     echo "🔧 DEMO MODE: Would show services for app=${APP_NAME}"
@@ -165,7 +167,9 @@ pipeline {
                             sh """
                                 sh """
                             echo "Checking rollout status for ${APP_NAME}-${COLOR}..."
-                            if kubectl cluster-info &>/dev/null; then
+                            CLUSTER_STATUS=\$(kubectl cluster-info &>/dev/null && echo "connected" || echo "disconnected")
+                            
+                            if [ "\$CLUSTER_STATUS" = "connected" ]; then
                                 kubectl rollout status deployment/${APP_NAME}-${COLOR} --timeout=300s
                                 
                                 echo "Deployment status:"

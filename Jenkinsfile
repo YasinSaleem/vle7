@@ -149,11 +149,14 @@ pipeline {
 
         stage('Debug Kubernetes') {
             steps {
-                sh '''
-                echo "KUBECONFIG: $KUBECONFIG"
-                kubectl cluster-info
-                kubectl get nodes
-                '''
+                withCredentials([file(credentialsId: 'kubeconfig-id', variable: 'KUBECONFIG')]) {
+                    sh '''
+                    echo "KUBECONFIG: $KUBECONFIG"
+                    kubectl cluster-info
+                    kubectl get nodes
+                    kubectl get pods -A
+                    '''
+                }
             }
         }
     }

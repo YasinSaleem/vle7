@@ -389,3 +389,4 @@ This setup is optimized for t3.small instances:
 # Test webhook trigger - Wed Oct 15 23:10:32 IST 2025
 # Test kubectl fix - Wed Oct 15 23:15:34 IST 2025
 # Build: 2025-10-15 23:27:41
+# Triggering green deployment - Thu Oct 16 00:02:24 IST 2025

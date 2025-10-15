@@ -9,7 +9,7 @@ A simple Node.js Express application for demonstrating blue-green deployments wi
 - Displays BUILD_NUMBER environment variable
 - Health check endpoint
 - Responsive web interface
-
+.
 ## Local Development
 
 ### Prerequisites

@@ -1,6 +1,12 @@
 ---
-# Global variables for all hosts
+# Global variables for VLE7 Blue-Green Deployment Setup
 # Override these variables as needed for your environment
+
+# Project Configuration
+project_name: "vle7-app"
+app_name: "vle7-app"
+app_port: 8080
+k8s_namespace: "default"
 
 # AWS Configuration
 aws_region: "us-east-1"  # Match your Terraform region

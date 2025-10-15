@@ -31,5 +31,7 @@ output "web_url" {
   value       = "http://${aws_instance.study_server.public_ip}"
 }
 
-# Simple setup - no complex cloud services
-# Perfect for learning Terraform basics
+output "jenkins_url" {
+  description = "URL to access Jenkins"
+  value       = "http://${aws_instance.study_server.public_ip}:8080"
+}

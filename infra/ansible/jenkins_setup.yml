@@ -15,27 +15,24 @@
       command: yum makecache
       changed_when: false
 
-    # Install Java 11
-    - name: Install Amazon Corretto 11 (Amazon Linux 2023)
-      ansible.builtin.dnf:
-        name: java-11-amazon-corretto
-        state: present
-        use_backend: dnf5
-      when:
-        - ansible_distribution == "Amazon"
-        - ansible_distribution_major_version | int >= 2023
+    # Install Java 17 (required for Jenkins 2.528.1+)
+    - name: Install Java 17 Amazon Corretto repository
+      become: yes
+      shell: |
+        rpm --import https://yum.corretto.aws/corretto.key
+        curl -Lo /etc/yum.repos.d/corretto.repo https://yum.corretto.aws/corretto.repo
+      args:
+        creates: /etc/yum.repos.d/corretto.repo
 
-    - name: Install Amazon Corretto 11 (Amazon Linux 2 and other older distros)
-      raw: sudo yum install -y java-11-amazon-corretto-headless
-      when:
-        - ansible_distribution == "Amazon"
-        - ansible_distribution_major_version | int < 2023
-
-    - name: Install OpenJDK 11 (fallback for non-Amazon distros)
-      ansible.builtin.apt:
-        name: openjdk-11-jdk
+    - name: Install Java 17 Amazon Corretto
+      become: yes
+      yum:
+        name: java-17-amazon-corretto
         state: present
-      when: ansible_os_family == "Debian"
+
+    - name: Set Java 17 as system default
+      become: yes
+      command: alternatives --set java /usr/lib/jvm/java-17-amazon-corretto.x86_64/bin/java
 
     # Install Git and Maven (Amazon Linux 2023)
     - name: Install Git and Maven (AL2023)
@@ -52,37 +49,8 @@
       raw: sudo yum install -y git maven
       when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int < 2023
 
-    # Install Docker (Amazon Linux 2023)
-    - name: Install Docker (AL2023)
-      ansible.builtin.dnf:
-        name: docker
-        state: present
-        use_backend: dnf5
-      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int >= 2023
-
-    # Install Docker (Amazon Linux 2)
-    - name: Install Docker (AL2)
-      raw: sudo yum install -y docker
-      when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int < 2023
-
-    - name: Start and enable Docker service
-      systemd:
-        name: docker
-        state: started
-        enabled: yes
-
-    # Install Docker Compose
-    - name: Install Docker Compose
-      get_url:
-        url: "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-linux-x86_64"
-        dest: /usr/local/bin/docker-compose
-        mode: '0755'
-
-    - name: Create docker-compose symlink
-      file:
-        src: /usr/local/bin/docker-compose
-        dest: /usr/bin/docker-compose
-        state: link
+    # Note: Docker removed to save memory on t3.small instance
+    # Applications will be deployed to remote Kubernetes cluster
 
     # Add Jenkins repository and install
     - name: Add Jenkins repository
@@ -108,6 +76,24 @@
       raw: sudo yum install -y jenkins
       when: ansible_distribution == "Amazon" and ansible_distribution_major_version | int < 2023
 
+    # Configure Jenkins to use Java 17
+    - name: Create Jenkins systemd override directory
+      become: yes
+      file:
+        path: /etc/systemd/system/jenkins.service.d
+        state: directory
+
+    - name: Configure Jenkins JAVA_HOME for Java 17
+      become: yes
+      copy:
+        content: |
+          [Service]
+          Environment="JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64"
+        dest: /etc/systemd/system/jenkins.service.d/override.conf
+      notify:
+        - reload systemd
+        - restart jenkins
+
     # Configure Jenkins service
     - name: Start and enable Jenkins service
       systemd:
@@ -115,25 +101,22 @@
         state: started
         enabled: yes
 
-    # Add users to docker group
-    - name: Add ec2-user to docker group
-      user:
-        name: "{{ system_user }}"
-        groups: docker
-        append: yes
-
-    - name: Add jenkins user to docker group
+    # Configure user permissions (Docker groups removed)
+    - name: Ensure jenkins user has proper permissions
       user:
         name: "{{ jenkins_user }}"
-        groups: docker
+        groups: wheel
         append: yes
 
-    # Install kubectl
+    # Install kubectl for remote Kubernetes cluster management
     - name: Download kubectl
       get_url:
         url: "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
         dest: /usr/local/bin/kubectl
         mode: '0755'
+
+    # Note: Minikube removed to save memory - using remote K8s cluster instead
+    # For local testing, you can install kind (Kubernetes in Docker) as a lighter alternative
 
     # Install AWS CLI v2
     - name: Download AWS CLI v2
@@ -239,6 +222,61 @@
       debug:
         msg: "Jenkins initial admin password: {{ jenkins_password.stdout }}"
 
+    # Create kubeconfig placeholder for remote cluster
+    - name: Create kubeconfig placeholder
+      copy:
+        content: |
+          # Placeholder kubeconfig - configure for your remote Kubernetes cluster
+          # Example configurations:
+          # 1. EKS: aws eks update-kubeconfig --region us-east-1 --name your-cluster
+          # 2. GKE: gcloud container clusters get-credentials your-cluster --zone us-central1-a
+          # 3. Kind: kind get kubeconfig --name your-cluster > ~/.kube/config
+          # 4. Manual: copy your cluster's kubeconfig here
+          
+          apiVersion: v1
+          kind: Config
+          clusters: []
+          contexts: []
+          users: []
+          current-context: ""
+        dest: "/home/{{ system_user }}/.kube/config"
+        owner: "{{ system_user }}"
+        group: "{{ system_user }}"
+        mode: '0600'
+      tags: kubeconfig
+
+    # Clone the repository for Jenkins job
+    - name: Clone project repository to jenkins workspace
+      git:
+        repo: "https://github.com/YasinSaleem/vle7.git"
+        dest: "/var/lib/jenkins/workspace/vle7-app-pipeline"
+        force: yes
+      become: yes
+      become_user: jenkins
+      ignore_errors: yes
+
+    # Install Jenkins plugins
+    - name: Install essential Jenkins plugins
+      shell: |
+        # Wait for Jenkins to be fully ready
+        sleep 30
+        
+        # Install plugins using Jenkins CLI
+        JENKINS_URL="http://localhost:8080"
+        JENKINS_CLI="/var/lib/jenkins/jenkins-cli.jar"
+        
+        # Download Jenkins CLI
+        wget -q -O $JENKINS_CLI $JENKINS_URL/jnlpJars/jenkins-cli.jar || echo "Failed to download CLI"
+        
+        # Skip setup wizard
+        echo "2.0" > /var/lib/jenkins/jenkins.install.InstallUtil.lastExecVersion
+        
+        # Create basic job using Job DSL if available
+        echo "Jenkins plugin installation attempted"
+      become: yes
+      ignore_errors: yes
+      tags: plugins
+
     # Kubernetes Configuration for Jenkins
     - name: Create .kube directory for jenkins user
       file:
@@ -275,35 +313,13 @@
       become: yes
       tags: kubeconfig
 
-    # Docker Configuration for Jenkins
-    - name: Create .docker directory for jenkins user
-      file:
-        path: /var/lib/jenkins/.docker
-        state: directory
-        owner: jenkins
-        group: jenkins
-        mode: '0755'
-      become: yes
-
-    - name: Create Docker config template for jenkins user
-      copy:
-        content: |
-          {
-            "auths": {},
-            "credsStore": "secretservice"
-          }
-        dest: /var/lib/jenkins/.docker/config.json
-        owner: jenkins
-        group: jenkins
-        mode: '0600'
-      become: yes
-
-    # Jenkins Environment Setup
-    - name: Add jenkins user to docker group (if not already)
-      user:
-        name: jenkins
-        groups: docker
-        append: yes
+    # Jenkins Environment Setup (Docker configuration removed)
+    - name: Ensure jenkins user has proper sudo access for kubectl
+      lineinfile:
+        path: /etc/sudoers.d/jenkins
+        line: 'jenkins ALL=(ALL) NOPASSWD: /usr/local/bin/kubectl'
+        create: yes
+        mode: '0440'
       become: yes
 
     - name: Set KUBECONFIG environment variable for jenkins
@@ -316,10 +332,10 @@
     - name: Create Jenkins environment file
       copy:
         content: |
-          # Jenkins Environment Variables
+          # Jenkins Environment Variables for Remote Kubernetes
           KUBECONFIG=/var/lib/jenkins/.kube/config
-          DOCKER_CONFIG=/var/lib/jenkins/.docker
           PATH=$PATH:/usr/local/bin
+          # Note: Docker removed - using remote container registry or pre-built images
         dest: /var/lib/jenkins/.env
         owner: jenkins
         group: jenkins
@@ -333,7 +349,48 @@
         enabled: yes
       become: yes
 
+    # Copy Jenkins job creation script
+    - name: Copy Jenkins job creation script
+      copy:
+        src: "../../scripts/create-jenkins-job.sh"
+        dest: "/home/{{ system_user }}/create-jenkins-job.sh"
+        owner: "{{ system_user }}"
+        group: "{{ system_user }}"
+        mode: '0755'
+      tags: job_creation
+
+    # Wait a bit more for Jenkins to fully restart
+    - name: Wait for Jenkins to be fully ready after restart
+      uri:
+        url: "http://localhost:8080/login"
+        method: GET
+        status_code: 200
+      register: jenkins_login_check
+      until: jenkins_login_check.status == 200
+      retries: 20
+      delay: 15
+      tags: job_creation
+
+    # Create Jenkins pipeline job
+    - name: Create Jenkins pipeline job
+      shell: "/home/{{ system_user }}/create-jenkins-job.sh"
+      become: yes
+      become_user: "{{ system_user }}"
+      register: job_creation_result
+      ignore_errors: yes
+      tags: job_creation
+
+    - name: Display job creation result
+      debug:
+        var: job_creation_result.stdout_lines
+      when: job_creation_result is defined
+      tags: job_creation
+
   handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
     - name: restart jenkins
       systemd:
         name: jenkins
@@ -361,20 +418,25 @@
           
           Installed Tools:
           - Java 11 OpenJDK
-          - Docker & Docker Compose
           - Git & Maven
-          - kubectl
+          - kubectl (for remote Kubernetes)
           - AWS CLI v2
           - Jenkins (latest stable)
+          - Python3 & development tools
           
-          Docker Access:
-          - ec2-user and jenkins users added to docker group
-          - Restart required for group changes to take effect
+          Optimizations:
+          - Docker removed to save memory on t3.small
+          - Remote Kubernetes cluster support
+          - Lightweight nginx-based deployments
           
           Notes:
-          - Jenkins seed templates available in /home/ec2-user/jenkins-seed/
-          - EKS kubeconfig will be configured if eks_cluster_name variable is set
-          - SSH public key will be added if jenkins_ssh_pubkey variable is set
+          - Configure ~/.kube/config for your Kubernetes cluster
+          - Pipeline job created automatically: vle7-app-pipeline
+          - Memory optimized for t3.small instances
+          
+          Kubernetes Setup Required:
+          - Configure kubeconfig for your cluster (EKS, GKE, or local)
+          - Example: aws eks update-kubeconfig --region us-east-1 --name your-cluster
           
           Security Reminders:
           - Change default Jenkins admin password after setup

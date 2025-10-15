@@ -1,4 +1,5 @@
-# Simple Terraform configuration for AWS Infrastructure - Study Environment
+# This is a simplified setup for study purposes
+# No additional complex resources to reduce chances of failure
 # Replace the variable values in terraform.tfvars or through CLI
 # Make sure to configure AWS credentials before running terraform commands
 
@@ -121,38 +122,100 @@ resource "aws_iam_instance_profile" "study_profile" {
   role = aws_iam_role.study_role.name
 }
 
-# Simple user data script
+# Enhanced user data script for Ansible compatibility
 locals {
   user_data = <<-EOF
     #!/bin/bash
     yum update -y
     
-    # Install basic tools
-    yum install -y git wget curl
+    # Install Python 3 and pip (required for Ansible)
+    yum install -y python3 python3-pip python3-devel
+    
+    # Install basic tools and dependencies
+    yum install -y git wget curl unzip vim
+    
+    # Install development tools for compiling Python packages
+    yum groupinstall -y "Development Tools"
+    
+    # Install OpenSSL development headers (needed for some Python packages)
+    yum install -y openssl-devel libffi-devel
+    
+    # Ensure pip is up to date
+    python3 -m pip install --upgrade pip
+    
+    # Install some common Python packages that Ansible might need
+    python3 -m pip install setuptools wheel
     
     # Create a simple status file
     echo "EC2 instance setup completed at $(date)" > /home/ec2-user/setup-status.txt
+    echo "Python version: $(python3 --version)" >> /home/ec2-user/setup-status.txt
+    echo "Pip version: $(python3 -m pip --version)" >> /home/ec2-user/setup-status.txt
     chown ec2-user:ec2-user /home/ec2-user/setup-status.txt
+    
+    # Set Python3 as default python for ec2-user
+    echo 'alias python=python3' >> /home/ec2-user/.bashrc
+    echo 'alias pip=pip3' >> /home/ec2-user/.bashrc
   EOF
 }
 
 # Simple EC2 instance - Free Tier Compatible
-resource "aws_instance" "study_server" {
-  ami                    = data.aws_ami.amazon_linux.id  # Free tier eligible
-  instance_type          = var.instance_type             # t3.micro (default) - free tier
-  key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.study_sg.id]
-  subnet_id              = data.aws_subnet.default.id
-  iam_instance_profile   = aws_iam_instance_profile.study_profile.name
+resource "aws_instance" "jenkins_server" {
+  ami           = "ami-0453ec754f44f9a4a"  # Amazon Linux 2023 AMI
+  instance_type = "t3.small"
+  key_name      = "yasinkey"
 
-  user_data = base64encode(local.user_data)
+  vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
 
-  # No custom EBS volume specified = uses default 8GB (within free tier 30GB limit)
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    
+    # Update system
+    dnf update -y
+    
+    # Install essential packages for Ansible compatibility
+    dnf install -y git curl wget python3.11 python3.11-pip python3.11-devel
+    
+    # Install development tools needed for Python packages  
+    dnf groupinstall -y "Development Tools"
+    dnf install -y openssl-devel libffi-devel bzip2-devel
+    
+    # Create symlinks for python3 and pip3 to use Python 3.11
+    alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+    alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.11 1
+    
+    # Ensure pip is up to date
+    python3 -m pip install --upgrade pip
+    
+    # Install essential Python packages
+    python3 -m pip install setuptools wheel
+    
+    # Create directory for later use
+    mkdir -p /home/ec2-user/workspace
+    chown ec2-user:ec2-user /home/ec2-user/workspace
+    
+    # Enable SSH access
+    sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    systemctl restart sshd
+    
+    echo "System initialization complete with Python 3.11"
+  EOF
+  )
 
   tags = {
-    Name = "study-server"
+    Name = "VLE7-Jenkins-Server"
   }
 }
 
-# This is a simplified setup for study purposes
-# No additional complex resources to reduce chances of failure
+# Generate Ansible inventory file
+# Generate Ansible inventory from Terraform outputs
+resource "local_file" "ansible_inventory" {
+  content = templatefile("${path.module}/inventory.tpl", {
+    instance_ip = aws_instance.study_server.public_ip
+    key_path    = "/Users/yasinsaleem/CourseWork/DevOps/vle7/yasinkey.pem"
+    aws_region  = var.aws_region
+    project_name = var.project_name
+  })
+  filename = "${path.module}/../ansible/inventory.ini"
+  
+  depends_on = [aws_instance.study_server]
+}

@@ -1,32 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: myapp-blue
+  name: vle7-app-blue
   labels:
-    app: myapp
-    color: blue
+    app: vle7-app
+    version: blue
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: myapp
-      color: blue
+      app: vle7-app
+      version: blue
   template:
     metadata:
       labels:
-        app: myapp
-        color: blue
+        app: vle7-app
+        version: blue
     spec:
       containers:
-      - name: myapp
-        image: yasinsaleem/myapp:latest
+      - name: vle7-app
+        image: nginx:alpine
         ports:
-        - containerPort: 8080
+        - containerPort: 80
         env:
-        - name: BUILD_NUMBER
-          value: "1"
         - name: COLOR
           value: "blue"
+        - name: BUILD_NUMBER
+          value: "1"
         resources:
           requests:
             memory: "64Mi"
@@ -34,22 +34,96 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "100m"
-        # Health checks temporarily disabled due to Node.js startup timing
-        # readinessProbe:
-        #   httpGet:
-        #     path: /health
-        #     port: 8080
-        #   initialDelaySeconds: 30
-        #   periodSeconds: 10
-        #   timeoutSeconds: 5
-        #   successThreshold: 1
-        #   failureThreshold: 3
-        # livenessProbe:
-        #   httpGet:
-        #     path: /health
-        #     port: 8080
-        #   initialDelaySeconds: 60
-        #   periodSeconds: 15
-        #   timeoutSeconds: 5
-        #   successThreshold: 1
-        #   failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: app-config
+          mountPath: /usr/share/nginx/html/index.html
+          subPath: index.html
+      volumes:
+      - name: app-config
+        configMap:
+          name: vle7-app-blue-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vle7-app-blue-config
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>VLE7 Blue Environment</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                text-align: center; 
+                background-color: #e3f2fd; 
+                color: #1565c0;
+                margin: 0;
+                padding: 50px;
+            }
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                padding: 40px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+            h1 { color: #1976d2; }
+            .version { 
+                background: #2196f3; 
+                color: white; 
+                padding: 10px 20px; 
+                border-radius: 25px;
+                display: inline-block;
+                margin: 20px 0;
+            }
+            .timestamp { color: #666; margin-top: 20px; }
+            .memory-info { 
+                background: #f5f5f5; 
+                padding: 15px; 
+                border-radius: 5px; 
+                margin: 20px 0;
+                font-size: 14px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🔵 VLE7 Application</h1>
+            <div class="version">BLUE Environment</div>
+            <p>Welcome to the Blue deployment of VLE7!</p>
+            <p>This is a blue-green deployment demonstration.</p>
+            <div class="memory-info">
+                <strong>Optimized for t3.small:</strong><br>
+                • No Docker builds on instance<br>
+                • Lightweight nginx containers<br>
+                • Remote Kubernetes cluster support<br>
+                • Minimal memory footprint
+            </div>
+            <div class="timestamp">
+                <p>Deployment Time: <span id="timestamp"></span></p>
+            </div>
+        </div>
+        <script>
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        </script>
+    </body>
+    </html>

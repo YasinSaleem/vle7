@@ -2,20 +2,20 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 metadata:
-  name: myapp
+  name: vle7-app
 
 resources:
-- deployment-blue.yaml
-- service.yaml
+  - deployment-blue.yaml
+  - deployment-green.yaml
+  - service.yaml
 
 commonLabels:
-  app: myapp
-  managed-by: kustomize
+  app: vle7-app
+  project: vle7
 
 images:
-- name: myapp
-  newTag: latest
+  - name: myapp
+    newTag: latest
 
-# Uncomment to switch to green deployment
-# patchesStrategicMerge:
-# - patch-green.yaml
+# Blue-Green deployment switching
+# Jenkins pipeline will manage switching between blue and green
